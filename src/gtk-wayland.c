@@ -137,6 +137,40 @@ gtk_wayland_override_on_window_unmap (GtkWindow *gtk_window, void *_data)
     g_value_unset (&args[0]);
 }
 
+static void
+gtk_wayland_override_on_window_map (GtkWindow *gtk_window, void *_data)
+{
+    (void)_data;
+
+    struct xdg_toplevel **xdg_toplevel = NULL;
+    struct xdg_toplevel **xdg_toplevel2 = NULL;
+    GtkWindow *transient_for = gtk_window_get_transient_for (gtk_window);
+    CustomShellSurface *shell_surface = gtk_window_get_custom_shell_surface (transient_for);
+    if (shell_surface) {
+        g_message ("Found shell surface %p", shell_surface);
+        GdkWindow *transient_for_gdk = gtk_widget_get_window (GTK_WIDGET (transient_for));
+        char* window_impl = *(void**)((char*)transient_for_gdk + sizeof(GObject));
+        xdg_toplevel = (struct xdg_toplevel **)(((void**)(window_impl + sizeof(GObject))) + 7);
+        xdg_toplevel2 = (struct xdg_toplevel **)(((void**)(window_impl + sizeof(GObject))) + 6);
+        *xdg_toplevel = (struct xdg_toplevel *)(1);
+        *xdg_toplevel2 = (struct xdg_toplevel *)(1);
+    }
+
+    // Call the super class's unmap handler
+    GValue args[1] = { G_VALUE_INIT };
+    g_value_init_from_instance (&args[0], gtk_window);
+    g_signal_chain_from_overridden (args, NULL);
+    g_value_unset (&args[0]);
+
+    if (xdg_toplevel) {
+        *xdg_toplevel = NULL;
+        *xdg_toplevel2 = NULL;
+        char* window_impl = *(void**)((char*)gtk_widget_get_window (gtk_window) + sizeof(GObject));
+        struct xdg_popup **xdg_popup = (struct xdg_popup **)(((void**)(window_impl + sizeof(GObject))) + 5);
+        shell_surface->virtual->get_popup(shell_surface, *xdg_popup, NULL);
+    }
+}
+
 void
 gtk_wayland_init_if_needed ()
 {
@@ -166,6 +200,10 @@ gtk_wayland_init_if_needed ()
     GClosure *unmap_closure = g_cclosure_new (G_CALLBACK (gtk_wayland_override_on_window_unmap), NULL, NULL);
     g_signal_override_class_closure (unmap_signal_id, GTK_TYPE_WINDOW, unmap_closure);
 
+    gint map_signal_id = g_signal_lookup ("map", GTK_TYPE_WINDOW);
+    GClosure *map_closure = g_cclosure_new (G_CALLBACK (gtk_wayland_override_on_window_map), NULL, NULL);
+    g_signal_override_class_closure (map_signal_id, GTK_TYPE_WINDOW, map_closure);
+
     has_initialized = TRUE;
 }
 
@@ -178,6 +216,7 @@ gtk_wayland_gdk_to_gtk_window (GdkWindow *gdk_window)
 void
 gtk_wayland_setup_window_as_custom_popup (GdkWindow *gdk_window, XdgPopupPosition const *position)
 {
+    return;
     GtkWindow *gtk_window = gtk_wayland_gdk_to_gtk_window (gdk_window);
     if (GTK_IS_WINDOW (gtk_window)) {
         // The GDK window has been connected to a GTK window

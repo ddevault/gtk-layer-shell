@@ -177,9 +177,9 @@ layer_surface_get_popup (CustomShellSurface *super,
         return NULL;
     }
 
-    struct xdg_popup *xdg_popup = xdg_surface_get_popup (popup_xdg_surface, NULL, positioner);
-    zwlr_layer_surface_v1_get_popup (self->layer_surface, xdg_popup);
-    return xdg_popup;
+    //struct xdg_popup *xdg_popup = xdg_surface_get_popup (popup_xdg_surface, NULL, positioner);
+    zwlr_layer_surface_v1_get_popup (self->layer_surface, popup_xdg_surface);
+    return NULL;
 }
 
 static GdkRectangle
